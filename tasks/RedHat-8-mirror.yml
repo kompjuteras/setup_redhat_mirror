@@ -1,0 +1,93 @@
+- name: Install required packages
+  yum:
+    name:
+      - yum-utils
+      - createrepo
+      - httpd
+      - python3-policycoreutils
+    state: present
+
+- name: Create repo directory {{ redhat_8_repo_path }}
+  file:
+    state: directory
+    mode: g+s
+    owner: apache
+    group: apache
+    path: "{{ redhat_8_repo_path }}"
+
+- name: Check do we have at least 100GB free on {{ redhat_8_repo_path }}
+  shell: |
+    set -o pipefail
+    df -PBG {{ redhat_8_repo_path }} | awk 'FNR == 2 {print ($4+1)}'
+  register: df_repo_path
+  changed_when: false
+
+- name: Check free space
+  assert:
+    that: df_repo_path.stdout|int >= 100
+    fail_msg: "There are not enough free space on {{ redhat_8_repo_path }} ({{ df_repo_path.stdout }}GB free)"
+    success_msg: "There are enough free space on {{ redhat_8_repo_path }} for the packages"
+
+- name: Creating index.html with redirect to /repo
+  copy:
+    dest: "/var/www/html/index.html"
+    mode: '0644'
+    content: |
+      <!DOCTYPE html>
+      <html>
+         <head>
+            <title>Red Hat 8 mirror</title>
+            <meta http-equiv = "refresh" content = "2; url = /repo" />
+         </head>
+         <body>
+            <p>Redirect for 2s...</p>
+         </body>
+      </html>
+
+- name: Allow apache to modify files in {{ redhat_8_repo_path }}
+  sefcontext:
+    target: '{{ redhat_8_repo_path }}(/.*)?'
+    setype: httpd_sys_rw_content_t
+    state: present
+  when: '"/var/www/html" not in redhat_8_repo_path'
+  tags: SELINUX
+
+- name: Apply new SELinux file context to {{ redhat_8_repo_path }}
+  command: restorecon -R {{ redhat_8_repo_path }}
+  when: '"/var/www/html" not in redhat_8_repo_path'
+  tags: SELINUX
+
+- name: Allow http on firewalld
+  firewalld:
+    service: http
+    permanent: yes
+    state: enabled
+    immediate: yes
+  failed_when: false
+
+- name: Start and enable service httpd
+  service:
+    name: httpd
+    state: started
+    enabled: yes
+
+- name: Create directory /root/.mirror-scripts for crontab scripts
+  file:
+    state: directory
+    path: "/root/.mirror-scripts"
+    mode: '0700'
+
+- name: Creating a script for crontab usage for Red Hat 8
+  template:
+    src: files/reposync-RedHat-8.sh.j2
+    dest: /root/.mirror-scripts/reposync-RedHat-8.sh
+    mode: '0700'
+    backup: yes
+
+- name: Setup cronjob for repo sync
+  cron:
+    name: "Synchronize RPM packages"
+    minute: "9"
+    hour: "0"
+    job: "/root/.mirror-scripts/reposync-RedHat-8.sh &> /var/log/reposync-RedHat-8.sh.log"
+    state: present

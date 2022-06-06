@@ -1,0 +1,15 @@
+# Red Hat 8: Disk path where will RPM be stored
+redhat_8_repo_path: "/var/www/html/repo"
+
+# Red Hat 8: RedHat 8 repos which you want to sync
+redhat_8_repos:
+  - rhel-8-for-x86_64-appstream-rpms
+  - rhel-8-for-x86_64-baseos-rpm
+
+# Red Hat 7: Disk path where will RPM be stored
+redhat_7_repo_path: "/var/www/html/repo"
+
+# Red Hat 8: RedHat 7 repos which you want to sync
+redhat_7_repos:
+  - rhel-7-server-rpms
+  - rhel-7-server-optional-rpms

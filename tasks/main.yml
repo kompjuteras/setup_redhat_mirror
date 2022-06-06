@@ -1,0 +1,15 @@
+- name: Check OS
+  assert:
+    that:
+      - ( ansible_distribution == 'RedHat'   and ( ansible_distribution_major_version == '7'  )) or
+        ( ansible_distribution == 'RedHat'   and ( ansible_distribution_major_version == '8'  ))
+    fail_msg: "Only RedHat 7 and 8 are supported, and this is {{ ansible_distribution }} {{ ansible_distribution_major_version }}"
+    success_msg: "{{ ansible_distribution }} {{ ansible_distribution_major_version }} is supported"
+
+- name: Check is https://cdn.redhat.com visible from the server
+  shell: timeout 10 curl -I https://cdn.redhat.com --insecure &>/dev/null
+  changed_when: False
+
+- name: Include play related to the OS version
+  include_tasks: "{{ ansible_distribution }}-{{ ansible_distribution_major_version }}-mirror.yml"
+  tags: SELINUX

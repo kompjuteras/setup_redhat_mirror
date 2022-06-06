@@ -1,0 +1,20 @@
+galaxy_info:
+  author: Darko Drazovic
+  description: Ansible role for the local RedHat RPM mirror
+
+  issue_tracker_url: https://github.com/kompjuteras/setup_redhat_mirror
+
+  license: GPL-2.0-or-later
+
+  min_ansible_version: 2.8
+
+  platforms:
+  - name: EL
+    versions:
+      - 7
+      - 8
+
+  galaxy_tags:
+    - rhel
+
+dependencies: []

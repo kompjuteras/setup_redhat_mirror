@@ -1,0 +1,60 @@
+#!/bin/bash
+#################################  Description ##########################################
+# Cronjob script for syncing RHEL repositories and making the local mirrors. 
+# Script will download all packages related to RHEL8.
+# ---------------------------------------------------------------------------------------
+# Created by Darko Drazovic | github.com/kompjuteras
+# ---------------------------------------------------------------------------------------
+#########################################################################################
+
+# Variables
+PATH=/usr/local/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+
+# Check is there some problem with orphaned reposync or createrepo
+if [[ $(pgrep -cx 'createrepo|reposync|modifyrepo') -gt 0 ]]; then
+ echo "Resposync is locked, we will kill createrepo and reposync processes...."
+ pgrep -lx 'createrepo|reposync|modifyrepo' | column -t
+ pkill -x -9 reposync
+ pkill -x -9 createrepo
+ pkill -x -9 modifyrepo
+fi
+
+# Check is cdn.redhat.com visible, so sync can continue
+if timeout 10 curl -I https://cdn.redhat.com --insecure &>/dev/null ; then
+  echo "https://cdn.redhat.com is visible"
+  yum clean all 1>/dev/null; rm -rf /var/cache/yum; yum list-sec -d1
+else
+  echo "Internet problem, https://cdn.redhat.com is visible is not visible"
+  exit 1
+fi
+
+# Give some info to output related to license
+echo "
+Licence check for Red Hat 8: ==============================
+$(subscription-manager list --consumed | grep "Subscription Name\|Ends")
+===========================================================
+"
+
+###############################################################################################
+# Regular RedHat 8 mirror with latest packages
+###############################################################################################
+echo '****************************************************************************************'
+echo    "$(date '+%F %T') START REDHAT 8 SYNC ================================================"
+for i in {{ redhat_8_repos | join(' ') }}
+do
+   echo "---------------------------------"
+   echo "$(date '+%F %T') - Starting with syncing for ${i} (RHEL 8)"
+   yum repolist ${i} -v | grep "Repo-baseurl"
+     # Based on: https://access.redhat.com/solutions/23016
+     if reposync -p {{ redhat_8_repo_path }}/ --download-metadata --repo="${i}"; then
+       echo "Sync was successfully"
+     else 
+       echo "Sync failed --> ${i}"
+     fi
+done
+chown apache:apache -R {{ redhat_8_repo_path }}/
+echo ; echo ; echo
+
+echo "$(date '+%F %T') SYNC FINISHED  ********************************************************"
+exit 0

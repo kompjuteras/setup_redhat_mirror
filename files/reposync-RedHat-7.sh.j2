@@ -1,0 +1,67 @@
+#!/bin/bash
+#################################  Description ##########################################
+# Cronjob script for syncing RHEL repositories and making the local mirrors. 
+# Script will download all packages related to RHEL7.
+# ---------------------------------------------------------------------------------------
+# Created by Darko Drazovic | github.com/kompjuteras
+# ---------------------------------------------------------------------------------------
+#########################################################################################
+
+# Variables
+PATH=/usr/local/sbin:/sbin:/bin:/usr/sbin:/usr/bin
+export PATH
+
+# Check is there some problem with orphaned reposync or createrepo
+if [[ $(pgrep -cx 'createrepo|reposync|modifyrepo') -gt 0 ]]; then
+ echo "Resposync is locked, we will kill createrepo and reposync processes...."
+ pgrep -lx 'createrepo|reposync|modifyrepo' | column -t
+ pkill -x -9 reposync
+ pkill -x -9 createrepo
+ pkill -x -9 modifyrepo
+fi
+
+# Check is cdn.redhat.com visible, so sync can continue
+if timeout 10 curl -I https://cdn.redhat.com --insecure &>/dev/null ; then
+  echo "https://cdn.redhat.com is visible"
+  yum clean all 1>/dev/null; rm -rf /var/cache/yum; yum list-sec -d1
+else
+  echo "Internet problem, https://cdn.redhat.com is visible is not visible"
+  exit 1
+fi
+
+# Give some info to output related to license
+echo "
+Licence check for Red Hat 7: ==============================
+$(subscription-manager list --consumed | grep "Subscription Name\|Ends")
+===========================================================
+"
+
+###############################################################################################
+# Regular RedHat 7 mirror with latest packages
+###############################################################################################
+echo '****************************************************************************************'
+echo    "$(date '+%F %T') START REDHAT 7 SYNC ================================================"
+for i in {{ redhat_7_repos | join(' ') }}
+do
+   echo "---------------------------------"
+   echo "$(date '+%F %T') - Starting with syncing for ${i} (RHEL 7)"
+   yum repolist ${i} -v | grep "Repo-baseurl"
+     # Based on: https://access.redhat.com/solutions/23016
+     if reposync -d --gpgcheck -l --repoid="${i}" --download_path={{ redhat_7_repo_path }}/ --downloadcomps --download-metadata ; then
+       createrepo "{{ redhat_7_repo_path }}/${i}" -g comps.xml --update
+       find "/var/cache/yum/x86_64/7Server/${i}/" -name updateinfo.xml -exec cp -p {} "{{ redhat_7_repo_path }}/${i}/repodata/updateinfo.xml" \;
+       modifyrepo "{{ redhat_7_repo_path }}/${i}/repodata/updateinfo.xml" "{{ redhat_7_repo_path }}/${i}/repodata"
+        # Remove old metadata (RHEL bug)
+        if [[ $(find {{ redhat_7_repo_path }}/${i} -maxdepth 1 -type f -name "*.xml.*" -mtime -6 | wc -l) -gt 0 ]]; then 
+          find {{ redhat_7_repo_path }}/${i} -maxdepth 1 -type f -name "*.xml.*" -mtime +6 -print -delete
+        fi
+       echo "Sync was successfully"
+     else 
+       echo "Sync failed --> ${i}"
+     fi
+done
+chown apache:apache -R {{ redhat_7_repo_path }}/
+echo ; echo ; echo
+
+echo "$(date '+%F %T') SYNC FINISHED  ********************************************************"
+exit 0
