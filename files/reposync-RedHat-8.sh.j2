@@ -20,6 +20,15 @@ if [[ $(pgrep -cx 'createrepo|reposync|modifyrepo') -gt 0 ]]; then
  pkill -x -9 modifyrepo
 fi
 
+# Problem related to the reposync, when at some point repos are not reachable.
+# Solution provided by Red Hat support
+echo "Removing yum cache and refreshing subscriptions"
+rm -rf /var/cache/yum/* &>/dev/null
+rm -rf /var/cache/dnf/* &>/dev/null
+dnf clean all           &>/dev/null
+yum clean all           &>/dev/null
+subscription-manager refresh
+
 # Check is cdn.redhat.com visible, so sync can continue
 if timeout 10 curl -I https://cdn.redhat.com --insecure &>/dev/null ; then
   echo "https://cdn.redhat.com is visible"
