@@ -32,7 +32,7 @@ subscription-manager refresh
 # Check is cdn.redhat.com visible, so sync can continue
 if timeout 10 curl -I https://cdn.redhat.com --insecure &>/dev/null ; then
   echo "https://cdn.redhat.com is visible"
-  yum clean all 1>/dev/null; rm -rf /var/cache/yum; yum list-sec -d1
+  yum list-sec -d1
 else
   echo "Internet problem, https://cdn.redhat.com is visible is not visible"
   exit 1
